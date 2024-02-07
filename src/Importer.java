@@ -2,6 +2,10 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import javax.swing.*;
+import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.TreeNode;
+import javax.swing.tree.TreePath;
 import java.awt.*;
 import java.io.File;
 import java.io.FileInputStream;
@@ -11,6 +15,7 @@ import java.nio.file.Path;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Objects;
 
@@ -18,8 +23,10 @@ public class Importer extends JFrame {
     static Path songPath = Path.of(new File("rhythm/song").toURI());
     static ArrayList<RmSong> songList = new ArrayList<>();
     static HashMap<String,String> songMap = new HashMap<>();
+    JTree tree = new JTree();
 
     public Importer() throws HeadlessException, IOException, URISyntaxException {
+        super("imdImporter");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(1024, 720);
         initializeSongList();
@@ -27,20 +34,41 @@ public class Importer extends JFrame {
         JPanel contentPane = new JPanel();
         contentPane.setLayout(new BorderLayout());
         setContentPane(contentPane);
-        //主表
-        JTable songTable = new JTable();
-        contentPane.add(songTable,"Center");
+        //主树
+        JScrollPane jScrollPane = new JScrollPane(tree);
+        contentPane.add(jScrollPane,"Center");
         //底部按钮
         JButton impButton = new JButton("导入");
         JButton closeButton = new JButton("关闭");
         JButton refreshButton = new JButton("刷新");
+        JButton expandButton = new JButton("展开所有");
+        expandButton.addActionListener(e -> expandAll(tree));
+        JButton collapseButton = new JButton("收起全部");
+        collapseButton.addActionListener(e -> collapseAll(tree));
         Box bottomButtons = Box.createHorizontalBox();
         bottomButtons.add(impButton);
         bottomButtons.add(closeButton);
         bottomButtons.add(refreshButton);
+        bottomButtons.add(expandButton);
+        bottomButtons.add(collapseButton);
         contentPane.add(bottomButtons,"South");
 
+        //搜索框
+        Box topComponents = Box.createHorizontalBox();
+        JTextField textField = new JTextField();
+        textField.setToolTipText("在此搜索......");
+        JButton searchButton = new JButton("搜索");
+        searchButton.addActionListener(e->jumpToNode(tree,textField.getText()));
+        topComponents.add(textField);
+        topComponents.add(searchButton);
+        contentPane.add(topComponents,"North");
 
+
+
+        DefaultMutableTreeNode root = new DefaultMutableTreeNode("rm");
+        for (RmSong song:songList)
+            root.add(creatNode(song));
+        tree.setModel(new DefaultTreeModel(root));
 
     }
 
@@ -50,7 +78,90 @@ public class Importer extends JFrame {
         } catch (URISyntaxException | IOException e) {
             throw new RuntimeException(e);
         }
+    }
 
+    static DefaultMutableTreeNode creatNode(RmSong song){
+        DefaultMutableTreeNode node = new DefaultMutableTreeNode(song.songName);
+        node.add(new DefaultMutableTreeNode("艺术家:" + song.artistName));
+        node.add(new DefaultMutableTreeNode("目录:" + song.songPath));
+        node.add(new DefaultMutableTreeNode("长度:" + song.songLength));
+        node.add(new DefaultMutableTreeNode("bpm:" + song.bpm));
+        DefaultMutableTreeNode fourKeys = new DefaultMutableTreeNode("4key");
+        int i = 0;
+        for (;i<3;i++) fourKeys.add(new DefaultMutableTreeNode(song.diffs.get(i).toString()));
+        DefaultMutableTreeNode fiveKeys = new DefaultMutableTreeNode("5key");
+        for (;i<6;i++) fiveKeys.add(new DefaultMutableTreeNode(song.diffs.get(i).toString()));
+        DefaultMutableTreeNode sixKeys = new DefaultMutableTreeNode("6key");
+        for (;i<9;i++) sixKeys.add(new DefaultMutableTreeNode(song.diffs.get(i).toString()));
+        node.add(fourKeys);
+        node.add(fiveKeys);
+        node.add(sixKeys);
+        return node;
+    }
+
+    // 展开树的所有节点
+    private static void expandAll(JTree tree) {
+        TreeNode root = (TreeNode) tree.getModel().getRoot();
+        expandAll(tree, new TreePath(root));
+    }
+    //递归展开
+    private static void expandAll(JTree tree, TreePath parent) {
+        TreeNode node = (TreeNode) parent.getLastPathComponent();
+        if (node.getChildCount() >= 0) {
+            for (int i = 0; i < node.getChildCount(); i++) {
+                TreeNode child = node.getChildAt(i);
+                TreePath path = parent.pathByAddingChild(child);
+                expandAll(tree, path);
+            }
+        }
+        tree.expandPath(parent);
+    }
+
+    // 收起树的所有节点
+    private static void collapseAll(JTree tree) {
+        TreeNode root = (TreeNode) tree.getModel().getRoot();
+        collapseAll(tree, new TreePath(root));
+    }
+
+    //递归收起
+    private static void collapseAll(JTree tree, TreePath parent) {
+        TreeNode node = (TreeNode) parent.getLastPathComponent();
+        if (node.getChildCount() >= 0) {
+            for (int i = 0; i < node.getChildCount(); i++) {
+                TreeNode child = node.getChildAt(i);
+                TreePath path = parent.pathByAddingChild(child);
+                collapseAll(tree, path);
+            }
+        }
+        tree.collapsePath(parent);
+    }
+
+    // 跳转到指定节点
+    private static void jumpToNode(JTree tree, String nodeText) {
+        DefaultMutableTreeNode root = (DefaultMutableTreeNode) tree.getModel().getRoot();
+        DefaultMutableTreeNode node = findNode(root, nodeText);
+        if (node != null) {
+            TreePath path = new TreePath(node.getPath());
+            tree.setSelectionPath(path);
+            tree.scrollPathToVisible(path);
+        } else {
+            JOptionPane.showMessageDialog(null, "Node not found.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    // 递归查找节点
+    private static DefaultMutableTreeNode findNode(DefaultMutableTreeNode parent, String nodeText) {
+        if (parent.getUserObject().toString().equals(nodeText)) {
+            return parent;
+        }
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            DefaultMutableTreeNode child = (DefaultMutableTreeNode) parent.getChildAt(i);
+            DefaultMutableTreeNode found = findNode(child, nodeText);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
     }
 
     /**
@@ -61,14 +172,14 @@ public class Importer extends JFrame {
         XSSFWorkbook xssfWorkbook = new XSSFWorkbook(
                 new FileInputStream(
                         new File(
-                                Importer.class.getResource("songs.xlsx").toURI()
+                                Objects.requireNonNull(Importer.class.getResource("songs.xlsx")).toURI()
                         )
                 )
         );
         //遍历工作簿中的所有数据
         for (int i = 0; i < xssfWorkbook.getNumberOfSheets(); i++) {
             //读取第i个工作表
-            System.out.println("读取第" + (i + 1) + "个sheet");
+//            System.out.println("读取第" + (i + 1) + "个sheet");
             XSSFSheet sheet = xssfWorkbook.getSheetAt(i);
             //获取最后一行的num，即总行数。此处从0开始
             int maxRow = sheet.getLastRowNum();
