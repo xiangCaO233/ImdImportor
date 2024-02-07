@@ -1,0 +1,12 @@
+正常启动Anaconda Prompt
+conda activate game
+mitmweb -s F:/rhythm/proxy.py --no-showhost
+
+
+ios  设备 设置-无线局域网-已连接的wifi-右边的小蓝圈-配置代理-手动
+
+服务器: 192.168.137.1
+端口: 8080
+认证: 关
+
+ 自带浏览器访问 mitm.it
